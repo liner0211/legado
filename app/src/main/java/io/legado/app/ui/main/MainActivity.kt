@@ -15,6 +15,7 @@ import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppConfig
+import io.legado.app.help.BookHelp
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.theme.ATH
 import io.legado.app.service.BaseReadAloudService
@@ -37,7 +38,7 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
     private var bookshelfReselected: Long = 0
     private var pagePosition = 0
     private val fragmentId = arrayOf(0, 1, 2, 3)
-    private val fragmentMap = mapOf<Int, Fragment>(
+    private val fragmentMap = mapOf(
         Pair(fragmentId[0], BookshelfFragment()),
         Pair(fragmentId[1], ExploreFragment()),
         Pair(fragmentId[2], RssFragment()),
@@ -61,9 +62,12 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         //自动更新书籍
         if (AppConfig.autoRefreshBook) {
             view_pager_main.postDelayed({
-                viewModel.upChapterList()
+                viewModel.upAllBookToc()
             }, 1000)
         }
+        view_pager_main.postDelayed({
+            viewModel.postLoad()
+        }, 3000)
     }
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
@@ -89,8 +93,8 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
     }
 
     private fun upVersion() {
-        if (getPrefInt(PreferKey.versionCode) != App.INSTANCE.versionCode) {
-            putPrefInt(PreferKey.versionCode, App.INSTANCE.versionCode)
+        if (getPrefInt(PreferKey.versionCode) != App.versionCode) {
+            putPrefInt(PreferKey.versionCode, App.versionCode)
             if (!BuildConfig.DEBUG) {
                 val log = String(assets.open("updateLog.md").readBytes())
                 TextDialog.show(supportFragmentManager, log, TextDialog.MD, 5000, true)
@@ -143,6 +147,11 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        BookHelp.clearRemovedCache()
+    }
+
     override fun observeLiveBus() {
         observeEvent<String>(EventBus.RECREATE) {
             recreate()
@@ -154,9 +163,12 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
                 view_pager_main.setCurrentItem(3, false)
             }
         }
+        observeEvent<String>(PreferKey.threadCount) {
+            viewModel.upPool()
+        }
     }
 
-    private inner class TabFragmentPageAdapter internal constructor(fm: FragmentManager) :
+    private inner class TabFragmentPageAdapter(fm: FragmentManager) :
         FragmentStatePagerAdapter(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
 
         override fun getItemPosition(`object`: Any): Int {

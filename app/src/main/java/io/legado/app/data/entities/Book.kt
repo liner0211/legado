@@ -4,9 +4,14 @@ import android.os.Parcelable
 import androidx.room.Entity
 import androidx.room.Ignore
 import androidx.room.Index
+import androidx.room.PrimaryKey
+import io.legado.app.App
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.BookType
+import io.legado.app.help.AppConfig
+import io.legado.app.service.help.ReadBook
 import io.legado.app.utils.GSON
+import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.fromJsonObject
 import kotlinx.android.parcel.IgnoredOnParcel
 import kotlinx.android.parcel.Parcelize
@@ -16,11 +21,11 @@ import kotlin.math.max
 @Parcelize
 @Entity(
     tableName = "books",
-    primaryKeys = ["name", "author"],
-    indices = [(Index(value = ["bookUrl"], unique = true))]
+    indices = [Index(value = ["name", "author"], unique = true)]
 )
 data class Book(
-    override var bookUrl: String = "",                   // 详情页Url(本地书源存储完整文件路径)
+    @PrimaryKey
+    override var bookUrl: String = "",          // 详情页Url(本地书源存储完整文件路径)
     var tocUrl: String = "",                    // 目录页Url (toc=table of Contents)
     var origin: String = BookType.local,        // 书源URL(默认BookType.local)
     var originName: String = "",                //书源名称 or 本地书籍文件名
@@ -48,7 +53,7 @@ data class Book(
     var canUpdate: Boolean = true,              // 刷新书架时更新书籍信息
     var order: Int = 0,                         // 手动排序
     var originOrder: Int = 0,                   //书源排序
-    var useReplaceRule: Boolean = true,         // 正文使用净化替换规则
+    var useReplaceRule: Boolean = AppConfig.replaceEnableDefault,         // 正文使用净化替换规则
     var variable: String? = null                // 自定义书籍变量信息(用于书源规则检索书籍信息)
 ) : Parcelable, BaseBook {
 
@@ -58,6 +63,10 @@ data class Book(
 
     fun isLocalTxt(): Boolean {
         return isLocalBook() && originName.endsWith(".txt", true)
+    }
+
+    fun isEpub(): Boolean {
+        return originName.endsWith(".epub", true)
     }
 
     fun isOnLineTxt(): Boolean {
@@ -107,6 +116,10 @@ data class Book(
         return charset(charset ?: "UTF-8")
     }
 
+    fun getFolderName(): String {
+        return name.replace(AppPattern.fileNameRegex, "") + MD5Utils.md5Encode16(bookUrl)
+    }
+
     fun toSearchBook(): SearchBook {
         return SearchBook(
             name = name,
@@ -127,5 +140,24 @@ data class Book(
             this.infoHtml = this@Book.infoHtml
             this.tocHtml = this@Book.tocHtml
         }
+    }
+
+    fun changeTo(newBook: Book) {
+        newBook.group = group
+        newBook.order = order
+        newBook.customCoverUrl = customCoverUrl
+        newBook.customIntro = customIntro
+        newBook.customTag = customTag
+        newBook.canUpdate = canUpdate
+        newBook.useReplaceRule = useReplaceRule
+        delete()
+        App.db.bookDao().insert(newBook)
+    }
+
+    fun delete() {
+        if (ReadBook.book?.bookUrl == bookUrl) {
+            ReadBook.book = null
+        }
+        App.db.bookDao().delete(this)
     }
 }

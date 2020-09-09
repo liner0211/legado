@@ -16,13 +16,15 @@ import io.legado.app.help.BookHelp
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.coroutine.CompositeCoroutine
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.model.WebBook
+import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.help.Download
 import io.legado.app.utils.postEvent
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.isActive
 import org.jetbrains.anko.toast
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.Executors
 
 class DownloadService : BaseService() {
@@ -32,16 +34,16 @@ class DownloadService : BaseService() {
     private var tasks = CompositeCoroutine()
     private val handler = Handler()
     private var runnable: Runnable = Runnable { upDownload() }
-    private val bookMap = hashMapOf<String, Book>()
-    private val webBookMap = hashMapOf<String, WebBook>()
-    private val downloadMap = hashMapOf<String, LinkedHashSet<BookChapter>>()
-    private val downloadCount = hashMapOf<String, DownloadCount>()
-    private val finalMap = hashMapOf<String, LinkedHashSet<BookChapter>>()
-    private val downloadingList = arrayListOf<String>()
+    private val bookMap = ConcurrentHashMap<String, Book>()
+    private val webBookMap = ConcurrentHashMap<String, WebBook>()
+    private val downloadMap = ConcurrentHashMap<String, CopyOnWriteArraySet<BookChapter>>()
+    private val downloadCount = ConcurrentHashMap<String, DownloadCount>()
+    private val finalMap = ConcurrentHashMap<String, CopyOnWriteArraySet<BookChapter>>()
+    private val downloadingList = CopyOnWriteArraySet<String>()
 
     @Volatile
     private var downloadingCount = 0
-    private var notificationContent = "正在启动下载"
+    private var notificationContent = App.INSTANCE.getString(R.string.starting_download)
 
     private val notificationBuilder by lazy {
         val builder = NotificationCompat.Builder(this, AppConst.channelIdDownload)
@@ -124,16 +126,19 @@ class DownloadService : BaseService() {
     private fun addDownloadData(bookUrl: String?, start: Int, end: Int) {
         bookUrl ?: return
         if (downloadMap.containsKey(bookUrl)) {
-            toast("该书已在下载列表")
+            updateNotification(getString(R.string.already_in_download))
+            toast(R.string.already_in_download)
             return
         }
         downloadCount[bookUrl] = DownloadCount()
         execute {
             App.db.bookChapterDao().getChapterList(bookUrl, start, end).let {
                 if (it.isNotEmpty()) {
-                    val chapters = linkedSetOf<BookChapter>()
+                    val chapters = CopyOnWriteArraySet<BookChapter>()
                     chapters.addAll(it)
                     downloadMap[bookUrl] = chapters
+                } else {
+                    Download.addLog("${getBook(bookUrl)?.name} is empty")
                 }
             }
             for (i in 0 until threadCount) {
@@ -151,8 +156,7 @@ class DownloadService : BaseService() {
 
     private fun download() {
         downloadingCount += 1
-        Download.addLog("downloadingCount++")
-        tasks.add(Coroutine.async(this, context = searchPool) {
+        val task = Coroutine.async(this, context = searchPool) {
             if (!isActive) return@async
             val bookChapter: BookChapter? = synchronized(this@DownloadService) {
                 downloadMap.forEach {
@@ -184,38 +188,41 @@ class DownloadService : BaseService() {
                         bookChapter,
                         scope = this,
                         context = searchPool
-                    ).onError {
-                        synchronized(this) {
-                            downloadingList.remove(bookChapter.url)
-                        }
-                        Download.addLog(it.localizedMessage)
-                    }.onSuccess(IO) { content ->
-                        BookHelp.saveContent(book, bookChapter, content)
-                        synchronized(this@DownloadService) {
-                            downloadCount[book.bookUrl]?.increaseSuccess()
-                            downloadCount[book.bookUrl]?.increaseFinished()
-                            downloadCount[book.bookUrl]?.let {
-                                updateNotification(
-                                    it,
-                                    downloadMap[book.bookUrl]?.size,
-                                    bookChapter.title
-                                )
+                    ).timeout(60000L)
+                        .onError {
+                            synchronized(this) {
+                                downloadingList.remove(bookChapter.url)
                             }
-                            val chapterMap =
-                                finalMap[book.bookUrl]
-                                    ?: linkedSetOf<BookChapter>().apply {
-                                        finalMap[book.bookUrl] = this
-                                    }
-                            chapterMap.add(bookChapter)
-                            if (chapterMap.size == downloadMap[book.bookUrl]?.size) {
-                                downloadMap.remove(book.bookUrl)
-                                finalMap.remove(book.bookUrl)
-                                downloadCount.remove(book.bookUrl)
-                            }
+                            Download.addLog("getContentError${it.localizedMessage}")
+                            updateNotification("getContentError${it.localizedMessage}")
                         }
-                    }.onFinally(IO) {
-                        postDownloading(true)
-                    }
+                        .onSuccess(IO) { content ->
+                            BookHelp.saveContent(book, bookChapter, content)
+                            synchronized(this@DownloadService) {
+                                downloadCount[book.bookUrl]?.increaseSuccess()
+                                downloadCount[book.bookUrl]?.increaseFinished()
+                                downloadCount[book.bookUrl]?.let {
+                                    updateNotification(
+                                        it,
+                                        downloadMap[book.bookUrl]?.size,
+                                        bookChapter.title
+                                    )
+                                }
+                                val chapterMap =
+                                    finalMap[book.bookUrl]
+                                        ?: CopyOnWriteArraySet<BookChapter>().apply {
+                                            finalMap[book.bookUrl] = this
+                                        }
+                                chapterMap.add(bookChapter)
+                                if (chapterMap.size == downloadMap[book.bookUrl]?.size) {
+                                    downloadMap.remove(book.bookUrl)
+                                    finalMap.remove(book.bookUrl)
+                                    downloadCount.remove(book.bookUrl)
+                                }
+                            }
+                        }.onFinally(IO) {
+                            postDownloading(true)
+                        }
                 } else {
                     //无需下载的，设置为增加成功
                     downloadCount[book.bookUrl]?.increaseSuccess()
@@ -223,13 +230,15 @@ class DownloadService : BaseService() {
                     postDownloading(true)
                 }
             }
-        })
+        }.onError {
+            Download.addLog("ERROR:${it.localizedMessage}")
+            updateNotification("ERROR:${it.localizedMessage}")
+        }
+        tasks.add(task)
     }
 
     private fun postDownloading(hasChapter: Boolean) {
         downloadingCount -= 1
-        Download.addLog("downloadingCount--")
-        Download.addLog("downloadingCount $downloadingCount")
         if (hasChapter) {
             download()
         } else {
@@ -257,19 +266,17 @@ class DownloadService : BaseService() {
         content: String
     ) {
         notificationContent =
-            "进度:${downloadCount.downloadFinishedCount}/$totalCount,成功:${downloadCount.successCount},$content"
+            "进度:" + downloadCount.downloadFinishedCount + "/" + totalCount + ",成功:" + downloadCount.successCount + "," + content
     }
 
     /**
      * 更新通知
      */
     private fun updateNotification(content: String) {
-        val builder = notificationBuilder
-        builder.setContentText(content)
-        val notification = builder.build()
+        notificationBuilder.setContentText(content)
+        val notification = notificationBuilder.build()
         startForeground(AppConst.notificationIdDownload, notification)
     }
-
 
     class DownloadCount {
         @Volatile

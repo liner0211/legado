@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import io.legado.app.App
@@ -29,7 +28,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.jetbrains.anko.toast
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArraySet
 
 
 class DownloadActivity : VMBaseActivity<DownloadViewModel>(R.layout.activity_download),
@@ -127,7 +127,7 @@ class DownloadActivity : VMBaseActivity<DownloadViewModel>(R.layout.activity_dow
             AppConst.bookGroupNone.groupId -> App.db.bookDao().observeNoGroup()
             else -> App.db.bookDao().observeByGroup(groupId)
         }
-        booksLiveData?.observe(this, Observer { list ->
+        booksLiveData?.observe(this, { list ->
             val booksDownload = list.filter {
                 it.isOnLineTxt()
             }
@@ -145,7 +145,7 @@ class DownloadActivity : VMBaseActivity<DownloadViewModel>(R.layout.activity_dow
     private fun initGroupData() {
         groupLiveData?.removeObservers(this)
         groupLiveData = App.db.bookGroupDao().liveDataAll()
-        groupLiveData?.observe(this, Observer {
+        groupLiveData?.observe(this, {
             groupList.clear()
             groupList.addAll(it)
             adapter.notifyDataSetChanged()
@@ -172,7 +172,7 @@ class DownloadActivity : VMBaseActivity<DownloadViewModel>(R.layout.activity_dow
     }
 
     override fun observeLiveBus() {
-        observeEvent<HashMap<String, LinkedHashSet<BookChapter>>>(EventBus.UP_DOWNLOAD) {
+        observeEvent<ConcurrentHashMap<String, CopyOnWriteArraySet<BookChapter>>>(EventBus.UP_DOWNLOAD) {
             if (it.isEmpty()) {
                 menu?.findItem(R.id.menu_download)?.setIcon(R.drawable.ic_play_24dp)
                 menu?.applyTint(this)
@@ -190,13 +190,13 @@ class DownloadActivity : VMBaseActivity<DownloadViewModel>(R.layout.activity_dow
 
     override fun export(position: Int) {
         exportPosition = position
-        FilePicker.selectFolder(this, exportRequestCode) {
-            val path = ACache.get(this@DownloadActivity).getAsString(exportBookPathKey)
-            if (path.isNullOrEmpty()) {
-                toast(R.string.no_default_path)
-            } else {
-                startExport(path)
-            }
+        val default = arrayListOf<String>()
+        val path = ACache.get(this@DownloadActivity).getAsString(exportBookPathKey)
+        if (!path.isNullOrEmpty()) {
+            default.add(path)
+        }
+        FilePicker.selectFolder(this, exportRequestCode, otherActions = default) {
+            startExport(it)
         }
     }
 
