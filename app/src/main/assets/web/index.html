@@ -14,7 +14,7 @@
             <div class="rules">
                 <div><b>基本</b></div>
                 <div>
-                    <div>源URL　:</div>
+                    <div>源域名　:</div>
                     <textarea rows="1" id="bookSourceUrl" class="base" title="bookSourceUrl"
                         placeholder="<必填>通常填写网站主页,例: https://www.qidian.com"></textarea>
                 </div>
@@ -34,14 +34,14 @@
                         placeholder="&lt;选填&gt;描述书源的特征信息"></textarea>
                 </div>
                 <div>
+                    <div>源注释　:</div>
+                    <textarea rows="1" id="bookSourceComment" class="base" title="bookSourceComment"
+                              placeholder="&lt;选填&gt;描述书源作者和状态"></textarea>
+                </div>
+                <div>
                     <div>登录地址:</div>
                     <textarea rows="1" id="loginUrl" class="base" title="loginUrl"
                         placeholder="&lt;选填&gt;填写网站登录网址,仅在需要登录的书源有用"></textarea>
-                </div>
-                <div>
-                    <div>注释:</div>
-                    <textarea rows="1" id="bookSourceComment" class="base" title="bookSourceComment"
-                              placeholder="&lt;选填&gt;描述书源作者和状态"></textarea>
                 </div>
                 <div>
                     <div>链接验证:</div>
@@ -56,7 +56,7 @@
                 <div><b>搜索</b></div>
                 <div>
                     <div>搜索地址:</div>
-                    <textarea rows="1" id="searchUrl" class="base" title="searchUrl"
+                    <textarea rows="3" id="searchUrl" class="base" title="searchUrl"
                         placeholder="[域名可省略]/search.php@kw={{key}}"></textarea>
                 </div>
                 <div>
@@ -228,34 +228,45 @@
                 <div>
                     <div>章节信息:</div>
                     <textarea rows="1" id="ruleToc_updateTime" class="ruleToc" title="updateTime"
-                        placeholder="选择章节信息 (规则结果为String)"></textarea>
+                              placeholder="选择章节信息 (规则结果为String)"></textarea>
                 </div>
                 <div>
                     <div>翻页规则:</div>
                     <textarea rows="1" id="ruleToc_nextTocUrl" class="ruleToc" title="nextTocUrl"
-                        placeholder="选择目录下一页链接 (规则结果为List&lt;String&gt;或String)"></textarea>
+                              placeholder="选择目录下一页链接 (规则结果为List&lt;String&gt;或String)"></textarea>
                 </div>
                 <p></p>
                 <div><b>正文</b></div>
                 <div>
+                    <div>脚本注入:</div>
+                    <textarea rows="3" id="ruleContent_webJs" class="ruleContent" title="webJs"
+                              placeholder="注入javascript，用于模拟鼠标点击等，必须有返回值，一般为String类型"></textarea>
+                </div>
+                <div>
                     <div>正文规则:</div>
                     <textarea rows="1" id="ruleContent_content" class="ruleContent" title="content"
-                        placeholder="选择正文内容 (规则结果为String)"></textarea>
+                              placeholder="选择正文内容 (规则结果为String)"></textarea>
                 </div>
                 <div>
                     <div>翻页规则:</div>
-                    <textarea rows="1" id="ruleContent_nextContentUrl" class="ruleContent" title="nextContentUrl"
-                        placeholder="选择下一分页(不是下一章)链接 (规则结果为String类型的Url)"></textarea>
-                </div>
-                <div>
-                    <div>脚本注入:</div>
-                    <textarea rows="3" id="ruleContent_webJs" class="ruleContent" title="webJs"
-                        placeholder="注入javascript，用于模拟鼠标点击等，无返回结果"></textarea>
+                    <textarea rows="1" id="ruleContent_nextContentUrl" class="ruleContent"
+                              title="nextContentUrl"
+                              placeholder="选择下一分页(不是下一章)链接 (规则结果为String类型的Url)"></textarea>
                 </div>
                 <div>
                     <div>资源正则:</div>
                     <textarea rows="1" id="ruleContent_sourceRegex" class="ruleContent" title="sourceRegex"
                         placeholder="匹配资源的url特征，用于嗅探"></textarea>
+                </div>
+                <div>
+                    <div>替换规则:</div>
+                    <textarea rows="1" id="ruleContent_replaceRegex" class="ruleContent" title="replaceRegex"
+                        placeholder="多页内容合并后替换，用于正文净化"></textarea>
+                </div>
+                <div>
+                    <div>图片样式:</div>
+                    <textarea rows="1" id="ruleContent_imageStyle" class="ruleContent" title="imageStyle"
+                        placeholder="FULL:铺满 不填:默认样式"></textarea>
                 </div>
                 <p></p>
                 <div><b>其它规则</b></div>
@@ -279,10 +290,10 @@
                     <textarea rows="1" id="customOrder" class="base" title="customOrder"
                         placeholder="整数: 0~N (可选,默认0) | 数字越小越靠前"></textarea>
                 </div>
-                <div>
+                <div style="display:none;">
                     <div>更新时间:</div>
                     <textarea rows="1" id="lastUpdateTime" class="base" title="lastUpdateTime"
-                        placeholder="整数: 0~N (可选,默认0) | 暂未使用"></textarea>
+                        placeholder="毫秒级时间戳 (自动生成) | 请勿手动填写"></textarea>
                 </div>
             </div>
         </div>
@@ -353,19 +364,19 @@
                     </div>
                     <div class="tab4">
                         <div class="context link">
-                            <a target="_blank" href="https://celeter.github.io">源制作教程</a>
+                            <a target="_blank" href="https://alanskycn.gitee.io/teachme">源制作教程</a>
                             <a target="_blank" href="https://zhuanlan.zhihu.com/p/29436838">Xpath基础教程</a>
                             <a target="_blank" href="https://zhuanlan.zhihu.com/p/32187820">Xpath高级教程</a>
-                            <a target="_blank" href="https://www.w3cschool.cn/regex_rmjc/?">正则表达式教程</a>
-                            <a target="_blank" href="https://regexr.com/">正则表达式在线验证工具</a>
+                            <a target="_blank" href="https://www.w3cschool.cn/regex_rmjc">正则表达式教程</a>
+                            <a target="_blank" href="https://regexr.com">正则表达式在线验证工具</a>
                             <div>^$()[]{}.?+*| 这些是Java正则特殊符号,匹配需转义
                                 <br>(?s) 前缀表示跨行解析
                                 <br>(?m) 前缀表示逐行匹配
                                 <br>(?i) 前缀表示忽略大小写
                             </div>
-                            <a target="_blank" href="https://www.beta.browxy.com/">代码在线运行工具</a>
+                            <a target="_blank" href="https://www.beta.browxy.com">代码在线运行工具</a>
                             <a target="_blank" href="bookshelf.html">阅读书架(经典)</a>
-							<a target="_blank" href="new/bookshelf.html">阅读书架(新潮)</a>
+                            <a target="_blank" href="new/index.html">阅读书架(新潮)</a>
                         </div>
                     </div>
                 </div>

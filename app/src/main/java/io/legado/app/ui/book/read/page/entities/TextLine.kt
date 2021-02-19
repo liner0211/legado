@@ -4,6 +4,7 @@ import android.text.TextPaint
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.ChapterProvider.textHeight
 
+@Suppress("unused")
 data class TextLine(
     var text: String = "",
     val textChars: ArrayList<TextChar> = arrayListOf(),
@@ -15,6 +16,8 @@ data class TextLine(
     var isReadAloud: Boolean = false
 ) {
 
+    val charSize: Int get() = textChars.size
+
     fun upTopBottom(durY: Float, textPaint: TextPaint) {
         lineTop = ChapterProvider.paddingTop + durY
         lineBottom = lineTop + textPaint.textHeight
@@ -25,8 +28,10 @@ data class TextLine(
         textChars.add(TextChar(charData, start = start, end = end))
     }
 
-    fun getTextCharAt(index: Int): TextChar {
-        return textChars[index]
+    fun getTextChar(index: Int): TextChar {
+        return textChars.getOrElse(index) {
+            textChars.last()
+        }
     }
 
     fun getTextCharReverseAt(index: Int): TextChar {

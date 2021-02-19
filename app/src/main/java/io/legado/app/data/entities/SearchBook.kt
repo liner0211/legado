@@ -4,8 +4,8 @@ import android.os.Parcelable
 import androidx.room.*
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
-import kotlinx.android.parcel.IgnoredOnParcel
-import kotlinx.android.parcel.Parcelize
+import kotlinx.parcelize.IgnoredOnParcel
+import kotlinx.parcelize.Parcelize
 
 @Parcelize
 @Entity(
@@ -25,8 +25,8 @@ data class SearchBook(
     var origin: String = "",                     // 书源规则
     var originName: String = "",
     var type: Int = 0,                          // @BookType
-    var name: String = "",
-    var author: String = "",
+    override var name: String = "",
+    override var author: String = "",
     override var kind: String? = null,
     var coverUrl: String? = null,
     var intro: String? = null,

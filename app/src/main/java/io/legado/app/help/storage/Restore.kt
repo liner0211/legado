@@ -7,13 +7,14 @@ import com.jayway.jsonpath.Configuration
 import com.jayway.jsonpath.JsonPath
 import com.jayway.jsonpath.Option
 import com.jayway.jsonpath.ParseContext
-import io.legado.app.App
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
+import io.legado.app.constant.androidId
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.*
-import io.legado.app.help.AppConfig
+import io.legado.app.help.DefaultData
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.help.ThemeConfig
@@ -23,12 +24,11 @@ import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.withContext
-import org.jetbrains.anko.defaultSharedPreferences
-import org.jetbrains.anko.toast
+import splitties.init.appCtx
 import java.io.File
 
 object Restore {
-    private val ignoreConfigPath = FileUtils.getPath(App.INSTANCE.filesDir, "restoreIgnore.json")
+    private val ignoreConfigPath = FileUtils.getPath(appCtx.filesDir, "restoreIgnore.json")
     val ignoreConfig: HashMap<String, Boolean> by lazy {
         val file = FileUtils.createFileIfNotExist(ignoreConfigPath)
         val json = file.readText()
@@ -46,25 +46,22 @@ object Restore {
 
     //忽略标题
     val ignoreTitle = arrayOf(
-        App.INSTANCE.getString(R.string.read_config),
-        App.INSTANCE.getString(R.string.theme_mode),
-        App.INSTANCE.getString(R.string.bookshelf_layout),
-        App.INSTANCE.getString(R.string.show_rss),
-        App.INSTANCE.getString(R.string.thread_count)
+        appCtx.getString(R.string.read_config),
+        appCtx.getString(R.string.theme_mode),
+        appCtx.getString(R.string.bookshelf_layout),
+        appCtx.getString(R.string.show_rss),
+        appCtx.getString(R.string.thread_count)
     )
 
     //默认忽略keys
     private val ignorePrefKeys = arrayOf(
-        PreferKey.versionCode,
         PreferKey.defaultCover
     )
     private val readPrefKeys = arrayOf(
         PreferKey.readStyleSelect,
         PreferKey.shareLayout,
-        PreferKey.pageAnim,
         PreferKey.hideStatusBar,
         PreferKey.hideNavigationBar,
-        PreferKey.bodyIndent,
         PreferKey.autoReadSpeed
     )
 
@@ -78,12 +75,12 @@ object Restore {
 
     suspend fun restore(context: Context, path: String) {
         withContext(IO) {
-            if (path.isContentPath()) {
+            if (path.isContentScheme()) {
                 DocumentFile.fromTreeUri(context, Uri.parse(path))?.listFiles()?.forEach { doc ->
                     for (fileName in Backup.backupFileNames) {
                         if (doc.name == fileName) {
                             DocumentUtils.readText(context, doc.uri)?.let {
-                                FileUtils.createFileIfNotExist(Backup.backupPath + File.separator + fileName)
+                                FileUtils.createFileIfNotExist("${Backup.backupPath}${File.separator}$fileName")
                                     .writeText(it)
                             }
                         }
@@ -96,7 +93,7 @@ object Restore {
                         FileUtils.getFile(file, fileName).let {
                             if (it.exists()) {
                                 it.copyTo(
-                                    FileUtils.createFileIfNotExist(Backup.backupPath + File.separator + fileName),
+                                    FileUtils.createFileIfNotExist("${Backup.backupPath}${File.separator}$fileName"),
                                     true
                                 )
                             }
@@ -114,45 +111,51 @@ object Restore {
     suspend fun restoreDatabase(path: String = Backup.backupPath) {
         withContext(IO) {
             fileToListT<Book>(path, "bookshelf.json")?.let {
-                App.db.bookDao().insert(*it.toTypedArray())
+                appDb.bookDao.insert(*it.toTypedArray())
             }
             fileToListT<Bookmark>(path, "bookmark.json")?.let {
-                App.db.bookmarkDao().insert(*it.toTypedArray())
+                appDb.bookmarkDao.insert(*it.toTypedArray())
             }
             fileToListT<BookGroup>(path, "bookGroup.json")?.let {
-                App.db.bookGroupDao().insert(*it.toTypedArray())
+                appDb.bookGroupDao.insert(*it.toTypedArray())
             }
             fileToListT<BookSource>(path, "bookSource.json")?.let {
-                App.db.bookSourceDao().insert(*it.toTypedArray())
+                appDb.bookSourceDao.insert(*it.toTypedArray())
             }
-            fileToListT<RssSource>(path, "rssSource.json")?.let {
-                App.db.rssSourceDao().insert(*it.toTypedArray())
+            fileToListT<RssSource>(path, "rssSources.json")?.let {
+                appDb.rssSourceDao.insert(*it.toTypedArray())
             }
             fileToListT<RssStar>(path, "rssStar.json")?.let {
-                App.db.rssStarDao().insert(*it.toTypedArray())
+                appDb.rssStarDao.insert(*it.toTypedArray())
             }
             fileToListT<ReplaceRule>(path, "replaceRule.json")?.let {
-                App.db.replaceRuleDao().insert(*it.toTypedArray())
+                appDb.replaceRuleDao.insert(*it.toTypedArray())
             }
-            fileToListT<TxtTocRule>(path, "txtTocRule.json")?.let {
-                App.db.txtTocRule().insert(*it.toTypedArray())
+            fileToListT<SearchKeyword>(path, "searchHistory.json")?.let {
+                appDb.searchKeywordDao.insert(*it.toTypedArray())
+            }
+            fileToListT<RuleSub>(path, "sourceSub.json")?.let {
+                appDb.ruleSubDao.insert(*it.toTypedArray())
+            }
+            fileToListT<TxtTocRule>(path, DefaultData.txtTocRuleFileName)?.let {
+                appDb.txtTocRule.insert(*it.toTypedArray())
+            }
+            fileToListT<HttpTTS>(path, DefaultData.httpTtsFileName)?.let {
+                appDb.httpTTSDao.insert(*it.toTypedArray())
             }
             fileToListT<ReadRecord>(path, "readRecord.json")?.let {
                 it.forEach { readRecord ->
                     //判断是不是本机记录
-                    if (readRecord.androidId != App.androidId) {
-                        App.db.readRecordDao().insert(readRecord)
+                    if (readRecord.androidId != androidId) {
+                        appDb.readRecordDao.insert(readRecord)
                     } else {
-                        val time = App.db.readRecordDao()
+                        val time = appDb.readRecordDao
                             .getReadTime(readRecord.androidId, readRecord.bookName)
                         if (time == null || time < readRecord.readTime) {
-                            App.db.readRecordDao().insert(readRecord)
+                            appDb.readRecordDao.insert(readRecord)
                         }
                     }
                 }
-            }
-            fileToListT<HttpTTS>(path, "httpTTS.json")?.let {
-                App.db.httpTTSDao().insert(*it.toTypedArray())
             }
         }
     }
@@ -161,7 +164,7 @@ object Restore {
         withContext(IO) {
             try {
                 val file =
-                    FileUtils.createFileIfNotExist(path + File.separator + ThemeConfig.configFileName)
+                    FileUtils.createFileIfNotExist("$path${File.separator}${ThemeConfig.configFileName}")
                 if (file.exists()) {
                     FileUtils.deleteFile(ThemeConfig.configFilePath)
                     file.copyTo(File(ThemeConfig.configFilePath))
@@ -173,7 +176,7 @@ object Restore {
             if (!ignoreReadConfig) {
                 try {
                     val file =
-                        FileUtils.createFileIfNotExist(path + File.separator + ReadBookConfig.configFileName)
+                        FileUtils.createFileIfNotExist("$path${File.separator}${ReadBookConfig.configFileName}")
                     if (file.exists()) {
                         FileUtils.deleteFile(ReadBookConfig.configFilePath)
                         file.copyTo(File(ReadBookConfig.configFilePath))
@@ -184,7 +187,7 @@ object Restore {
                 }
                 try {
                     val file =
-                        FileUtils.createFileIfNotExist(path + File.separator + ReadBookConfig.shareConfigFileName)
+                        FileUtils.createFileIfNotExist("$path${File.separator}${ReadBookConfig.shareConfigFileName}")
                     if (file.exists()) {
                         FileUtils.deleteFile(ReadBookConfig.shareConfigFilePath)
                         file.copyTo(File(ReadBookConfig.shareConfigFilePath))
@@ -194,8 +197,8 @@ object Restore {
                     e.printStackTrace()
                 }
             }
-            Preferences.getSharedPreferences(App.INSTANCE, path, "config")?.all?.let { map ->
-                val edit = App.INSTANCE.defaultSharedPreferences.edit()
+            Preferences.getSharedPreferences(appCtx, path, "config")?.all?.let { map ->
+                val edit = appCtx.defaultSharedPreferences.edit()
                 map.forEach {
                     if (keyIsNotIgnore(it.key)) {
                         when (val value = it.value) {
@@ -209,30 +212,25 @@ object Restore {
                     }
                 }
                 edit.apply()
-                AppConfig.replaceEnableDefault =
-                    App.INSTANCE.getPrefBoolean(PreferKey.replaceEnableDefault, true)
             }
             ReadBookConfig.apply {
-                styleSelect = App.INSTANCE.getPrefInt(PreferKey.readStyleSelect)
-                shareLayout = App.INSTANCE.getPrefBoolean(PreferKey.shareLayout)
-                pageAnim = App.INSTANCE.getPrefInt(PreferKey.pageAnim)
-                hideStatusBar = App.INSTANCE.getPrefBoolean(PreferKey.hideStatusBar)
-                hideNavigationBar = App.INSTANCE.getPrefBoolean(PreferKey.hideNavigationBar)
-                bodyIndentCount = App.INSTANCE.getPrefInt(PreferKey.bodyIndent, 2)
-                autoReadSpeed = App.INSTANCE.getPrefInt(PreferKey.autoReadSpeed, 46)
+                styleSelect = appCtx.getPrefInt(PreferKey.readStyleSelect)
+                shareLayout = appCtx.getPrefBoolean(PreferKey.shareLayout)
+                hideStatusBar = appCtx.getPrefBoolean(PreferKey.hideStatusBar)
+                hideNavigationBar = appCtx.getPrefBoolean(PreferKey.hideNavigationBar)
+                autoReadSpeed = appCtx.getPrefInt(PreferKey.autoReadSpeed, 46)
             }
             ChapterProvider.upStyle()
             ReadBook.loadContent(resetPageOffset = false)
         }
         withContext(Main) {
-            App.INSTANCE.toast(R.string.restore_success)
+            appCtx.toastOnUi(R.string.restore_success)
             if (!BuildConfig.DEBUG) {
-                LauncherIconHelp.changeIcon(App.INSTANCE.getPrefString(PreferKey.launcherIcon))
+                LauncherIconHelp.changeIcon(appCtx.getPrefString(PreferKey.launcherIcon))
             }
-            LanguageUtils.setConfigurationOld(App.INSTANCE)
-            App.INSTANCE.applyDayNight()
+            LanguageUtils.setConfiguration(appCtx)
+            ThemeConfig.applyDayNight(appCtx)
             postEvent(EventBus.SHOW_RSS, "")
-            postEvent(EventBus.RECREATE, "")
         }
     }
 
